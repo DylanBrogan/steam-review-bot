@@ -1,0 +1,209 @@
+To-Do:
+1. Return multiple options to user, to get correct game to review. Try to get ID directly from there rather than finding again.
+    - Think about how to do this. Might be easier if tool and chat models were the same instance
+2. Clean-up tool response payload, cut out information model doesn't need
+3. Expand to include more reviews, or have logic for what reviews should be included
+4. Get user's username for use in title NOTE: Requires web API key or working with 3rd party websites. Deprioritized
+
+Format of review within returned list:
+Review 17: {
+  "recommendationid": "179772123",
+  "author": {
+    "steamid": "76561198057304213",
+    "num_games_owned": 960,
+    "num_reviews": 70,
+    "playtime_forever": 5323,
+    "playtime_last_two_weeks": 611,
+    "playtime_at_review": 4881,
+    "deck_playtime_at_review": 192,
+    "last_played": 1732765371
+  },
+  "language": "english",
+  "review": "One of the best, This is one of those games you will get lost in. beautiful, captivating. a MUST have!",
+  "timestamp_created": 1732512590,
+  "timestamp_updated": 1732512590,
+  "voted_up": true,
+  "votes_up": 1,
+  "votes_funny": 0,
+  "weighted_vote_score": "0.52173912525177002",
+  "comment_count": 0,
+  "steam_purchase": true,
+  "received_for_free": false,
+  "written_during_early_access": false,
+  "primarily_steam_deck": false
+}
+
+
+STEAM BACKUP BELOW
+// File of wrapper functions for Steam's Reviews API
+import axios from "axios";
+
+const BASE_URL = "https://store.steampowered.com/appreviews";
+const APP_LIST_URL = "https://api.steampowered.com/ISteamApps/GetAppList/v0002/";
+
+// Interfaces for App List to get ID
+interface App {
+    appid: number;
+    name: string;
+}
+  
+interface AppListResponse {
+applist: {
+    apps: App[];
+};
+}
+
+// Interfaces for review information
+interface ReviewAuthor {
+  steamid: string;
+  num_games_owned: number;
+  num_reviews: number;
+  playtime_forever: number;
+  playtime_last_two_weeks: number;
+  playtime_at_review: number;
+  deck_playtime_at_review?: number;
+  last_played: number;
+}
+
+interface SteamReview {
+  recommendationid: string;
+  author: ReviewAuthor;
+  language: string;
+  review: string;
+  timestamp_created: number;
+  timestamp_updated: number;
+  voted_up: boolean;
+  votes_up: number;
+  votes_funny: number;
+  weighted_vote_score: number;
+  comment_count: number;
+  steam_purchase: boolean;
+  received_for_free: boolean;
+  written_during_early_access: boolean;
+  developer_response?: string;
+  timestamp_dev_responded?: number;
+  primarily_steam_deck?: boolean;
+}
+
+interface ReviewQuerySummary {
+  num_reviews: number;
+  review_score: number;
+  review_score_desc: string;
+  total_positive: number;
+  total_negative: number;
+  total_reviews: number;
+  cursor: string;
+}
+
+interface SteamReviewsResponse {
+  success: number;
+  query_summary: ReviewQuerySummary;
+  reviews: SteamReview[];
+}
+
+export class SteamReviewsAPI {
+  /**
+   * Fetch reviews for a specific Steam app.
+   * @param appid - The Steam App ID for the game.
+   * @param cursor - The cursor for paginated results. Default is "*".
+   * @param limit - Maximum number of reviews to fetch. Default is 20.
+   * @returns An array of reviews and query summary data.
+   */
+
+    // public appList: App[] | null = null;
+    static appList: any;
+
+
+  static async fetchReviews(
+    game_name: string,
+    cursor: string = "*",
+    limit: number = 20
+  ): Promise<{ querySummary: ReviewQuerySummary; reviews: SteamReview[] }> {
+    console.log("Using Review Fetch Tool")
+
+    // Fetch list of games and app IDs if not populated
+    if (!this.appList) {
+        console.log("Fetching app list from Steam API...");
+        const response = await axios.get<AppListResponse>(APP_LIST_URL);
+        this.appList = response.data.applist.apps;
+    }
+            
+      // Normalize the search term for case-insensitive comparison
+      const normalizedName = game_name.toLowerCase();
+  
+      // Search for the app   // NOTE: Games with DLC will get multiple hits. Could implement a cycle to ask the user to clarify from potential options
+      // const matchedApps = this.appList.filter((app: { name: string; }) =>
+      //   app.name.toLowerCase().includes(normalizedName)
+      // );
+      const exactMatch = this.appList.find((app: { name: string; }) => app.name.toLowerCase() === normalizedName);
+
+      // Below section works to provide multiple matches. Should provide this to the model to give to the user to clarify  
+  // Handle ambiguous results
+  // if (matchedApps.length === 0) {
+  //   throw new Error(`No app found for game name: ${game_name}`);
+  // } 
+
+//   else if (matchedApps.length > 1) {
+//     console.log(
+//       `Multiple matches found for "${game_name}". Please refine your search. Potential matches:`,
+//       matchedApps.map((app: { appid: any; name: any; }) => ({ appid: app.appid, name: app.name }))
+//     );
+//     throw new Error(`Ambiguous game name: ${game_name}`);
+//   }
+  console.log(exactMatch)
+  const appid = exactMatch.appid;
+  // const appid = matchedApps[0].appid;
+   
+    console.log(`Fetching reviews for app ID: ${appid}`);
+    try {
+      const response = await axios.get<SteamReviewsResponse>(
+        `${BASE_URL}/${appid}?json=1`,
+        {
+          params: { cursor, num_per_page: limit },
+        }
+      );
+
+      if (response.data.success !== 1) {
+        throw new Error("Failed to fetch reviews from Steam API.");
+      }
+
+      const { query_summary, reviews } = response.data;
+      // console.log("REVIEWS: ", reviews)
+      return {
+        querySummary: query_summary,
+        reviews: reviews.map((review) => ({
+          recommendationid: review.recommendationid,
+          author: {
+            steamid: review.author.steamid,
+            num_games_owned: review.author.num_games_owned,
+            num_reviews: review.author.num_reviews,
+            // playtime_forever: review.author.playtime_forever,
+            // playtime_last_two_weeks: review.author.number;
+            // playtime_at_review: review.author.number;
+            // deck_playtime_at_review?: review.author.number;
+            // last_played: review.author.number;
+            playtime_forever_hours: Math.round(review.author.playtime_forever / 60),
+          },
+          language: review.language,
+          review: review.review,
+          // timestamp_created: review.timestamp_created,
+          // timestamp_updated: review.timestamp_updated,          
+          voted_up: review.voted_up,
+          votes_up: review.votes_up,
+          votes_funny: review.votes_funny,
+          weighted_vote_score: review.weighted_vote_score,
+          comment_count: review.comment_count,
+          // steam_purchase: review.steam_purchase,
+          // received_for_free: review.received_for_free,
+          // written_during_early_access: review.written_during_early_access,
+          developer_response: review.developer_response,
+          // timestamp_dev_responded: review.timestamp_dev_responded,
+          // primarily_steam_deck: review.primarily_steam_deck,
+        })) as unknown as SteamReview[],
+      };
+    } catch (error) {
+      console.error("Error fetching Steam reviews:", error);
+      throw new Error("Failed to fetch reviews from Steam API.");
+    }
+  }
+}
