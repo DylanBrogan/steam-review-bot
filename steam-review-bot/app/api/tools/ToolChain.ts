@@ -11,11 +11,11 @@ import { AIMessageChunk } from "@langchain/core/messages";
 import { SteamReviewsAPI } from "./Steam";
 
 const tool_model = new AzureChatOpenAI({
-  azureOpenAIApiDeploymentName: "gpt4v2",
-  azureOpenAIApiKey: "6fcf24c200bb4ca1bedd7fb7c32a7f47",
-  azureOpenAIApiInstanceName: "dbrog-m2agopml-eastus",
-  azureOpenAIEndpoint: "https://dbrog-m2agopml-eastus.openai.azure.com/",
-  azureOpenAIApiVersion: "2024-08-01-preview",
+  azureOpenAIApiDeploymentName: process.env['AZURE_OPENAI_API_DEPLOYMENT_NAME'],
+  azureOpenAIApiKey: process.env['AZURE_OPENAI_API_KEY'],
+  azureOpenAIApiInstanceName: process.env['AZURE_OPENAI_API_INSTANCE_NAME'],
+  azureOpenAIEndpoint: process.env['AZURE_OPENAI_ENDPOINT'],
+  azureOpenAIApiVersion: process.env['AZURE_OPENAI_API_VERSION'],
   temperature: 0
 });
 
@@ -70,7 +70,7 @@ You are an assistant that has access to the following tool to retrieve game revi
 
 {{rendered_tools}}
 
-When analyzing user input, identify if the user mentions a specific video game in their prompt. If a game is mentioned, use the tool to find reviews from it.
+When analyzing user input, identify if the user asks for reviews about a specific video game in their prompt. If reviews/thoughts are asked for, use the tool to find reviews from it.
 
 Always use the JSON format below, and never add extra text. Here is the required response format:
 
@@ -160,7 +160,7 @@ const tool_chain = tool_prompt
 type ToolChainResponse = {
   name: string;
   arguments: { name: string } | { title: string };
-  output: string;
+  output: {reviews: string[]};
 };
 
 export async function toolChainInput(input: string): Promise<ToolChainResponse> {
