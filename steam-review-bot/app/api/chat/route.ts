@@ -1,4 +1,4 @@
-import {  LangChainAdapter, Message } from "ai";
+import {  LangChainAdapter } from "ai";
 
 import { AzureChatOpenAI } from "@langchain/openai";
 import { RunnableSequence } from "@langchain/core/runnables";
@@ -15,8 +15,6 @@ const model = new AzureChatOpenAI({
   azureOpenAIEndpoint: process.env['AZURE_OPENAI_ENDPOINT'],
   azureOpenAIApiVersion: process.env['AZURE_OPENAI_API_VERSION'],
 });
-
-const reviewsJSON = JSON.stringify(reviewsData, null, 2);
 
 const SYSTEM_TEMPLATE = `
 You are a chatbot who works with Steam reviews. 
@@ -97,7 +95,6 @@ const prompt = ChatPromptTemplate.fromMessages([
   new MessagesPlaceholder("chat_history"),
   new MessagesPlaceholder("tool_response"),
   new MessagesPlaceholder("tool_response_history"),
-  // new MessagesPlaceholder("tool_response_history"),
   ["human", "{input}"],
 ]);
 
@@ -124,7 +121,7 @@ export const POST = async (request: Request) => {
   
   console.log("TOOL RESPONSE: Reviews:");
   if (tool_response.output.reviews) {
-    tool_response.output.reviews.forEach((review: any, index: number) => {
+    tool_response.output.reviews.forEach((review: string, index: number) => {
       console.log(`Review ${index + 1}: ${JSON.stringify(review, null, 2)}`);
     });
   }

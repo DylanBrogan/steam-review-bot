@@ -141,6 +141,7 @@ const tool_chain = tool_prompt
       parsedOutput = JSON.parse(modelContent);
     } catch (error) {
       // If invalid JSON error is caught, no tool is required and response below is sent.
+      console.log(error)
       return {
         name: "none",
         arguments: {},
